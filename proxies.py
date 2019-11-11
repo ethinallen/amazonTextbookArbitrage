@@ -14,7 +14,7 @@ def gen(num=1):
 			  "https": str(proxy),
 			}
 			proxyList.append(proxies)
-			print proxy
+			print(proxy)
 	return proxyList
 
 if __name__ == '__main__':

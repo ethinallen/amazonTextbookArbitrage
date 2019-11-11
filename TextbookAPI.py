@@ -6,7 +6,7 @@ import bs4
 import time
 import csv
 proxies = {
-	
+
 }
 def get_dec(x):
 	a = (float(''.join(ele for ele in x if ele.isdigit() or ele == '.')))
@@ -119,7 +119,7 @@ def Biblio(ListOfASIN, CSV=False, Debug=0):
 				if Debug > 1:
 					print(exp)
 				pass
-		
+
 		return [page, Asin]
 	def ConvertPageToNumbers(page, Asin):
 		Price = TradeFromHTML(str(str(page.select('.ob-price')[0]).partition('Price: <span class="price">')[2]).partition(' </span>\n</h3>\n<span class="shipping"')[0])
@@ -139,7 +139,7 @@ def Biblio(ListOfASIN, CSV=False, Debug=0):
 					time.sleep(1)
 				pass
 
-	if hasattr(ListOfASIN, 'lower'): 
+	if hasattr(ListOfASIN, 'lower'):
 		#Determines if the user inputted a string or list
 		ListOfASIN = [ListOfASIN]
 
@@ -183,7 +183,7 @@ def Half(ListOfASIN, CSV=False, Debug=0):
 				if Debug > 1:
 					print(exp)
 				pass
-		
+
 		return [page, Asin]
 	def ConvertPageToNumbers(page, Asin):
 		halfprices = []
@@ -208,7 +208,7 @@ def Half(ListOfASIN, CSV=False, Debug=0):
 					time.sleep(1)
 				pass
 
-	if hasattr(ListOfASIN, 'lower'): 
+	if hasattr(ListOfASIN, 'lower'):
 		#Determines if the user inputted a string or list
 		ListOfASIN = [ListOfASIN]
 

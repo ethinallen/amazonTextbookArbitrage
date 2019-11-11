@@ -6,6 +6,7 @@ import RandomHeaders
 import random
 import csv
 import time
+import os
 
 headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 #AMAZON_URL = "https://www.amazon.com/s/search-alias%3Dtradein-aps&field-keywords={0}&page={1}"
@@ -20,14 +21,17 @@ BOOK_TITLE = ".s-access-title"
 BOOK_COVER = ".cfMarker"
 TRADE_IN_REVIEW_BOX = ".a-span-last"
 THREADS = 10
+
 try:
-	proxy = open("proxyAddress.txt").read().strip()
+	proxy = open("proxyAddress.txt").readlines()
+	proxy = [p.rstrip('\n') for p in proxy]
 except:
 	raise Exception("Proxy not defined")
+
 proxyStatus = {}
 
 def chunks(l, n):
-	for i in xrange(0, len(l), n):
+	for i in range(0, len(l), n):
 		yield l[i:i + n]
 
 def isTradeInEligible(item):
@@ -80,9 +84,10 @@ def extractAllPageInfo(asin):
 			pass
 	return None
 
+# take BeautifulSoup object and return the number of pages that can be searched
 def getPageCount(page):
 	try:
-		pageCount = int(page.select(".pagnDisabled")[0].getText())
+		pageCount = int(soup.find_all("li", {"class" : "a-disabled"})[-1].getText())
 	except:
 		try:
 			pageCount = int(re.findall("(\d+)", str(page.select("#pagn")[0].getText().replace("\n", " ")))[-1])
@@ -90,6 +95,7 @@ def getPageCount(page):
 			pageCount = 1
 	return pageCount
 
+# take the id of the item that you want and return the price of the product
 def extractPrice(itemID):
 	try:
 		page = grabPage(USED_PRICE_URL.format(itemID))
@@ -106,8 +112,7 @@ def extractPrice(itemID):
 
 def grabPage(url):
 	for i in range(10):
-
-		proxies = {"http": proxy, "https": proxy}
+		proxies = {"http": random.choice(proxy), "https": random.choice(proxy)}
 		try:
 			res = requests.get(url, headers=RandomHeaders.LoadHeader(), proxies=proxies, timeout=10)
 		except Exception as exp:
@@ -123,6 +128,7 @@ def grabPage(url):
 	return page
 
 def extractInfoFromItem(item):
+	print("extractInfoFromItem")
 	try:
 		tempInfo = {}
 		tempInfo['title'] = item.select(BOOK_TITLE)[0].getText()
@@ -136,13 +142,16 @@ def extractInfoFromItem(item):
 		tempInfo['trade_in_price'] = float(item.select(TRADE_IN_SELECTOR)[0].getText().replace('$', ''))
 	except:
 		tempInfo = None
+	print("TEMPINFO {}".format(tempInfo))
 	return tempInfo
 
 def extractInfoFromPage(page):
+	print("extractInfoFromPage")
 	pageItems = []
 	for item in page.select(ITEM_SELECTOR):
 		info = extractInfoFromItem(item)
 		if info != None:
+			print(info)
 			pageItems.append(info)
 	return pageItems
 
@@ -157,12 +166,15 @@ def genURLs(keyword, pageCount):
 		urlList.append(url)
 	return urlList
 
+# search class to parse the amazon webpages
 class search(object):
 	def __init__(self):
 		self.toSearch = []
 		self.results = []
 		self.profitable = []
 
+	# add the textbook information given a search tearm
+	# will populate a list of url's to query
 	def add(self, keyword):
 		url = AMAZON_URL.format(keyword, 1)
 		page = grabPage(url)
@@ -171,23 +183,32 @@ class search(object):
 		for url in genURLs(keyword, pageCount):
 			self.toSearch.append(url)
 
+	# extract all of the page info given a list of urls
 	def extractFromURL(self, urlList):
+
+		print(urlList)
+
+		# go through every url in the list and append profitable finds
 		for url in urlList:
 			info = extractInfoFromURL(url)
 			for val in info:
 				val['purchase_price'] = extractPrice(val['item_id'])
 				self.results.append(val)
+				print(val)
 				if val['purchase_price'] < val['trade_in_price']:
 					self.profitable.append(val)
 					print("Profitable item found")
 
 	def start(self):
+
 		parts = int(len(self.toSearch)/THREADS)
+
 		if parts != 0:
 			listOfURLs = chunks(self.toSearch, parts)
 		else:
 			listOfURLs = chunks(self.toSearch, 1)
-		threads = [threading.Thread(target=self.extractFromURL, args=(urlList,)) for urlList in listOfURLs]
+
+		threads = [threading.Thread(target=self.extractFromURL, args=(url[0],)) for url in listOfURLs]
 		for thread in threads:
 			thread.start()
 		for thread in threads:
@@ -210,28 +231,18 @@ class amazonTextbookDB(object):
 				page = grabPage(url)
 
 
-
-	#def search(self, keyword):
-
-
 if __name__ == '__main__':
-	#print extractAllPageInfo('0134093410')
-	'''url = "https://www.amazon.com/s/ref=sr_nr_i_0?srs=9187220011&fst=as%3Aoff&rh=i%3Atradein-aps%2Ck%3Abiology%2Ci%3Astripbooks&keywords=biology&ie=UTF8&qid=1527811678"
-	#url = "https://www.amazon.com/s/ref=nb_sb_noss_2?url=srs%3D9187220011%26search-alias%3Dtradein-aps&field-keywords=python+2&rh=i%3Atradein-aps%2Ck%3Apython+2"
-	#url = "https://www.amazon.com/s/ref=nb_sb_noss_2?url=srs%3D9187220011%26search-alias%3Dtradein-aps&field-keywords=python+program&rh=i%3Atradein-aps%2Ck%3Apython+program"
-	#url = "https://www.amazon.com/s/ref=nb_sb_noss_2?url=srs%3D9187220011%26search-alias%3Dtradein-aps&field-keywords=python+3&rh=i%3Atradein-aps%2Ck%3Apython+3"
-	url = "https://www.amazon.com/s/ref=sr_pg_2?&fst=p90x%3A1&rh=i%3Atradein-aps%2Ck%3Atextbooks&page=2"
-	#page = grabPage(url)
-	#print extractInfoFromPage(page)
-	#print getResultCount(page).getText()
+
 	e = search()
-	e.add(raw_input("Search Term: "))
-	f = e.start()
+
+	# e.add(raw_input("Search Term: "))
+	e.start()
 	print("{} Profitable items found".format(len(e.profitable)))
 	for val in e.profitable:
-		print("{} - ${}".format(val['item_url'],  val['trade_in_price'] - val['purchase_price']))'''
+		print("{} - ${}".format(val['item_url'],  val['trade_in_price'] - val['purchase_price']))
 	start_time = time.clock()
 	e = search()
+
 	e.add('biology')
 	e.add('chemistry')
 	e.add('psychology')
@@ -239,10 +250,12 @@ if __name__ == '__main__':
 	e.add('education')
 	e.add('textbook')
 	e.add('computer')
-	f = e.start()
+	e.start()
+
 	AllNewsInfo = []
 	t = random.choice(list(e.profitable))['item_id']
 	AllNewsInfo.append(list(extractAllPageInfo(t).keys()))
+
 	for val in e.profitable:
 		try:
 			tInfo = extractAllPageInfo(val['item_id'])
@@ -251,7 +264,7 @@ if __name__ == '__main__':
 				AllNewsInfo.append(list(tInfo.values()))
 				print("appended")
 		except Exception as exp:
-			print exp
+			print(exp)
 	with open('info.csv', 'wb') as myfile:
 		wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
 		wr.writerows(AllNewsInfo)
