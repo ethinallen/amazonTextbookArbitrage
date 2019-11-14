@@ -13,7 +13,7 @@ headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleW
 AMAZON_URL = "https://www.amazon.com/s/ref=sr_nr_i_0?srs=9187220011&fst=as%3Aoff&rh=i%3Atradein-aps%2Ck%3A{0}%2Ci%3Astripbooks&page={1}"
 USED_PRICE_URL = "https://www.amazon.com/gp/offer-listing/{0}/ref=dp_olp_used?ie=UTF8&condition=used"
 ALL_PAGE = "https://www.amazon.com/gp/offer-listing/{0}/ref=olp_f_new?ie=UTF8&f_all=true&f_new=true&f_used=true"
-ITEM_SELECTOR = ".s-item-container"
+ITEM_SELECTOR = ".sg-col-inner"
 TRADE_IN_SELECTOR = ".a-color-price"
 ITEM_SPECIFICS = ".a-text-left.a-col-right"
 # Page count = [0], Publisher = [1], ISBN-100 = [2], ISBN-13 = [3]
@@ -110,25 +110,55 @@ def extractPrice(itemID):
 		print("Error returning 1000...")
 		return 1000
 
+def makeRequest(url, responses):
+	print('making request to {}'.format(url))
+	proxies = {"http": random.choice(proxy), "https": random.choice(proxy)}
+	try:
+
+		response = requests.get(url, headers=RandomHeaders.LoadHeader(), proxies=proxies, timeout=10)
+		print(response)
+		responses.append(response.text)
+
+	except Exception as e:
+		print(e)
+
 def grabPage(url):
-	for i in range(10):
-		proxies = {"http": random.choice(proxy), "https": random.choice(proxy)}
-		try:
-			res = requests.get(url, headers=RandomHeaders.LoadHeader(), proxies=proxies, timeout=10)
-		except Exception as exp:
-			res = None
-		if res != None:
+	# for i in range(10):
+		# print("TRY {}".format(i))
+		# proxies = {"http": random.choice(proxy), "https": random.choice(proxy)}
+		# try:
+		# 	res = requests.get(url, headers=RandomHeaders.LoadHeader(), proxies=proxies, timeout=10)
+		# except Exception as exp:
+		# 	res = None
+		# if res != None:
+		# 	break
+
+	responses = []
+
+	threads = [threading.Thread(target=makeRequest, args=(url, responses,)) for i in range(0,5)]
+
+	for thread in threads:
+		thread.start()
+	for thread in threads:
+		thread.join()
+
+	for response in responses:
+		if response != None:
+
+			page = bs4.BeautifulSoup(response, 'lxml')
 			break
-	page = bs4.BeautifulSoup(res.text, 'lxml')
+		else:
+			pass
 	try:
 		pageNum = re.findall('page\S(\d+)', url)[0]
+		print("Grabbed: {} | Page: {}".format(page.title.string, pageNum))
 	except:
 		pageNum = 1
-	print("Grabbed: {} | Page: {}".format(page.title.string, pageNum))
+
+
 	return page
 
 def extractInfoFromItem(item):
-	print("extractInfoFromItem")
 	try:
 		tempInfo = {}
 		tempInfo['title'] = item.select(BOOK_TITLE)[0].getText()
@@ -146,8 +176,10 @@ def extractInfoFromItem(item):
 	return tempInfo
 
 def extractInfoFromPage(page):
+
 	print("extractInfoFromPage")
 	pageItems = []
+
 	for item in page.select(ITEM_SELECTOR):
 		info = extractInfoFromItem(item)
 		if info != None:
@@ -176,6 +208,7 @@ class search(object):
 	# add the textbook information given a search tearm
 	# will populate a list of url's to query
 	def add(self, keyword):
+		print('ADDING:\t{}'.format(keyword))
 		url = AMAZON_URL.format(keyword, 1)
 		page = grabPage(url)
 		pageCount = getPageCount(page)
@@ -185,9 +218,6 @@ class search(object):
 
 	# extract all of the page info given a list of urls
 	def extractFromURL(self, urlList):
-
-		print(urlList)
-
 		# go through every url in the list and append profitable finds
 		for url in urlList:
 			info = extractInfoFromURL(url)
@@ -208,11 +238,12 @@ class search(object):
 		else:
 			listOfURLs = chunks(self.toSearch, 1)
 
-		threads = [threading.Thread(target=self.extractFromURL, args=(url[0],)) for url in listOfURLs]
+		threads = [threading.Thread(target=self.extractFromURL, args=(url,)) for url in listOfURLs]
 		for thread in threads:
 			thread.start()
 		for thread in threads:
 			thread.join()
+
 		return self.results
 
 class amazonTextbookDB(object):
@@ -224,6 +255,7 @@ class amazonTextbookDB(object):
 		url = AMAZON_URL.format(keyword, 1)
 		page = grabPage(url)
 		pageCount = getPageCount(page)
+		print("\n\n\nPAGE COUNT {}\n\n\n".format(pageCount))
 		print("Keyword: {} Pages: {}".format(keyword, pageCount))
 		for i in range(1, pageCount):
 			if i != 1:
@@ -233,23 +265,29 @@ class amazonTextbookDB(object):
 
 if __name__ == '__main__':
 
-	e = search()
+	try:
+		keyWords = open("smallKeyWords.txt").readlines()
+		keyWords = [word.rstrip('\n') for word in keyWords]
+	except:
+		raise Exception("Keywords not defined")
+
+	# e = search()
 
 	# e.add(raw_input("Search Term: "))
-	e.start()
-	print("{} Profitable items found".format(len(e.profitable)))
-	for val in e.profitable:
-		print("{} - ${}".format(val['item_url'],  val['trade_in_price'] - val['purchase_price']))
-	start_time = time.clock()
+	# e.start()
+	# print("{} Profitable items found".format(len(e.profitable)))
+	# for val in e.profitable:
+	# 	print("{} - ${}".format(val['item_url'],  val['trade_in_price'] - val['purchase_price']))
+	# start_time = time.clock()
 	e = search()
 
-	e.add('biology')
-	e.add('chemistry')
-	e.add('psychology')
-	e.add('philosophy')
-	e.add('education')
-	e.add('textbook')
-	e.add('computer')
+	threads = [threading.Thread(target=e.add, args=(keyword,)) for keyword in keyWords]
+
+	for thread in threads:
+		thread.start()
+	for thread in threads:
+		 thread.join()
+
 	e.start()
 
 	AllNewsInfo = []

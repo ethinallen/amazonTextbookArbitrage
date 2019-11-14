@@ -3,3 +3,4 @@ proxyAddress.txt
 sendText.py
 sendEmail.py
 info.csv
+*.txt
