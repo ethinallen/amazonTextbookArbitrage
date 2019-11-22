@@ -17,7 +17,7 @@ ITEM_SELECTOR = ".sg-col-inner"
 TRADE_IN_SELECTOR = ".a-color-price"
 ITEM_SPECIFICS = ".a-text-left.a-col-right"
 # Page count = [0], Publisher = [1], ISBN-100 = [2], ISBN-13 = [3]
-BOOK_TITLE = ".s-access-title"
+BOOK_TITLE = "a-size-medium a-color-base a-text-normal"
 BOOK_COVER = ".cfMarker"
 TRADE_IN_REVIEW_BOX = ".a-span-last"
 THREADS = 10
@@ -88,6 +88,7 @@ def extractAllPageInfo(asin):
 def getPageCount(page):
 	try:
 		pageCount = int(soup.find_all("li", {"class" : "a-disabled"})[-1].getText())
+		print("PAGE COUNT:\t{}".format(pageCount))
 	except:
 		try:
 			pageCount = int(re.findall("(\d+)", str(page.select("#pagn")[0].getText().replace("\n", " ")))[-1])
@@ -110,38 +111,33 @@ def extractPrice(itemID):
 		print("Error returning 1000...")
 		return 1000
 
+# populates the responses list with request responses from url
 def makeRequest(url, responses):
-	print('making request to {}'.format(url))
 	proxies = {"http": random.choice(proxy), "https": random.choice(proxy)}
 	try:
 
 		response = requests.get(url, headers=RandomHeaders.LoadHeader(), proxies=proxies, timeout=10)
-		print(response)
 		responses.append(response.text)
 
 	except Exception as e:
-		print(e)
+		pass
 
+# given a url return the page information
 def grabPage(url):
-	# for i in range(10):
-		# print("TRY {}".format(i))
-		# proxies = {"http": random.choice(proxy), "https": random.choice(proxy)}
-		# try:
-		# 	res = requests.get(url, headers=RandomHeaders.LoadHeader(), proxies=proxies, timeout=10)
-		# except Exception as exp:
-		# 	res = None
-		# if res != None:
-		# 	break
 
+	print("GRABBING: \t{}".format(url))
 	responses = []
 
+	# thread 5 requests to the url
 	threads = [threading.Thread(target=makeRequest, args=(url, responses,)) for i in range(0,5)]
-
 	for thread in threads:
 		thread.start()
 	for thread in threads:
 		thread.join()
 
+	print("LENGTH {}".format(len(responses)))
+
+	# return the first response that yields a valid page
 	for response in responses:
 		if response != None:
 
@@ -155,10 +151,11 @@ def grabPage(url):
 	except:
 		pageNum = 1
 
-
 	return page
 
+# given an item pull all of the item information
 def extractInfoFromItem(item):
+	print("\n\n\n THIS IS MY ITEM \n\n\n{}".format(item))
 	try:
 		tempInfo = {}
 		tempInfo['title'] = item.select(BOOK_TITLE)[0].getText()
@@ -172,12 +169,11 @@ def extractInfoFromItem(item):
 		tempInfo['trade_in_price'] = float(item.select(TRADE_IN_SELECTOR)[0].getText().replace('$', ''))
 	except:
 		tempInfo = None
-	print("TEMPINFO {}".format(tempInfo))
 	return tempInfo
 
+# given page (bs4 object) return all items on that page
 def extractInfoFromPage(page):
 
-	print("extractInfoFromPage")
 	pageItems = []
 
 	for item in page.select(ITEM_SELECTOR):
@@ -187,10 +183,12 @@ def extractInfoFromPage(page):
 			pageItems.append(info)
 	return pageItems
 
+# queries url arg and returns the page info
 def extractInfoFromURL(url):
 	page = grabPage(url)
 	return extractInfoFromPage(page)
 
+# generate urls with the page number given the total number of pages for each keyword
 def genURLs(keyword, pageCount):
 	urlList = []
 	for i in range(1, pageCount+1):
@@ -229,6 +227,7 @@ class search(object):
 					self.profitable.append(val)
 					print("Profitable item found")
 
+	# start the search object
 	def start(self):
 
 		parts = int(len(self.toSearch)/THREADS)
@@ -251,6 +250,7 @@ class amazonTextbookDB(object):
 		self.arg = arg
 		self.database = []
 
+	# takes keyword and queries amazon for that textbook keyword
 	def search(self, keyword):
 		url = AMAZON_URL.format(keyword, 1)
 		page = grabPage(url)
@@ -265,20 +265,14 @@ class amazonTextbookDB(object):
 
 if __name__ == '__main__':
 
+	# load the keywords to add to the query
+	###### Will need to chunk this later or loop it
 	try:
 		keyWords = open("smallKeyWords.txt").readlines()
 		keyWords = [word.rstrip('\n') for word in keyWords]
 	except:
 		raise Exception("Keywords not defined")
 
-	# e = search()
-
-	# e.add(raw_input("Search Term: "))
-	# e.start()
-	# print("{} Profitable items found".format(len(e.profitable)))
-	# for val in e.profitable:
-	# 	print("{} - ${}".format(val['item_url'],  val['trade_in_price'] - val['purchase_price']))
-	# start_time = time.clock()
 	e = search()
 
 	threads = [threading.Thread(target=e.add, args=(keyword,)) for keyword in keyWords]
@@ -288,6 +282,7 @@ if __name__ == '__main__':
 	for thread in threads:
 		 thread.join()
 
+	# start the searcher
 	e.start()
 
 	AllNewsInfo = []
@@ -303,9 +298,12 @@ if __name__ == '__main__':
 				print("appended")
 		except Exception as exp:
 			print(exp)
+
+	# write the price quotes to csv
 	with open('info.csv', 'wb') as myfile:
 		wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
 		wr.writerows(AllNewsInfo)
+
 	timeSeconds = round(float(time.clock() - start_time), 2)
 	subject = "{} Profitable Items found in {} Seconds".format(len(AllNewsInfo), timeSeconds)
 	try:
